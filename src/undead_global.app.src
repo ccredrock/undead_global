@@ -1,0 +1,12 @@
+{application, undead_global,
+ [
+  {description, ""},
+  {vsn, "1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, {undead_global_app, []}},
+  {env, []}
+]}.
