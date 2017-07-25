@@ -45,6 +45,7 @@ get() ->
 
 %%------------------------------------------------------------------------------
 init([]) ->
+    [net_adm:ping(Node) || Node <- application:get_env(undead_global, nodes, [])],
     process_flag(trap_exit, true),
     {ok, #state{}, 0}.
 
