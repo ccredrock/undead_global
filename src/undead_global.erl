@@ -45,6 +45,7 @@ get() ->
 
 %%------------------------------------------------------------------------------
 init([]) ->
+    process_flag(trap_exit, true),
     {ok, #state{}, 0}.
 
 handle_call({reg, Name, MFA}, _From, State) ->
