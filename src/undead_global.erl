@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author ccredrock@gmail.com
-%%% @copyright (C) 2017, <meituan>
+%%% @copyright (C) 2017, <free>
 %%% @doc
 %%%
 %%% @end
@@ -12,7 +12,7 @@
 
 -export([start_link/0]).
 
--export([reg/2, get/0]).
+-export([reg/2, get/0, nodes/0]).
 
 %% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -43,14 +43,17 @@ reg(Name, MFA) ->
 get() ->
     gen_server:call(?MODULE, get).
 
+nodes() ->
+    application:get_env(?MODULE, nodes, []).
+
 %%------------------------------------------------------------------------------
 init([]) ->
-    [net_adm:ping(Node) || Node <- application:get_env(undead_global, nodes, [])],
+    [net_adm:ping(Node) || Node <- undead_global:nodes()],
     process_flag(trap_exit, true),
     {ok, #state{}, 0}.
 
 handle_call({reg, Name, MFA}, _From, State) ->
-     case do_reg(Name, MFA, State) of
+     case handle_reg(Name, MFA, State) of
          {ok, State1} -> {reply, ok, State1};
          {error, Reason} -> {reply, {error, Reason}, State}
      end;
@@ -68,24 +71,23 @@ terminate(_Reason, _State) ->
     ok.
 
 handle_info(timeout, State) ->
-    State1 = do_timeout(State),
+    State1 = handle_timeout(State),
     erlang:send_after(?TIMEOUT, self(), timeout),
     {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
 %%------------------------------------------------------------------------------
-do_reg(Name, MFA, #state{list = List} = State) ->
-    case do_eusure(Name, MFA) of
-        ok ->
-            {ok, State#state{list = lists:keystore(Name, 1, List, {Name, MFA})}};
-        {error, reg_fail} ->
-            {ok, State#state{list = lists:keystore(Name, 1, List, {Name, MFA})}};
-        {error, Reason} ->
-            {error, Reason}
+%% @private
+handle_reg(Name, MFA, #state{list = List} = State) ->
+    case eusure_reg(Name, MFA) of
+        ok -> {ok, State#state{list = lists:keystore(Name, 1, List, {Name, MFA})}};
+        {error, reg_fail} -> {ok, State#state{list = lists:keystore(Name, 1, List, {Name, MFA})}};
+        {error, Reason} -> {error, Reason}
     end.
 
-do_eusure(Name, {M, F, A}) ->
+%% @private
+eusure_reg(Name, {M, F, A}) ->
     case catch global:whereis_name(Name) of
         undefined ->
             case catch apply(M, F, A) of
@@ -102,7 +104,9 @@ do_eusure(Name, {M, F, A}) ->
     end.
 
 %%------------------------------------------------------------------------------
-do_timeout(#state{list = List} = State) ->
-    Fun = fun({Name, MFA}) -> do_eusure(Name, MFA) end,
+%% @private
+handle_timeout(#state{list = List} = State) ->
+    catch [net_adm:ping(Node) || Node <- undead_global:nodes()],
+    Fun = fun({Name, MFA}) -> eusure_reg(Name, MFA) end,
     lists:foreach(Fun, List), State.
 
